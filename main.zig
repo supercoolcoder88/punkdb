@@ -23,8 +23,16 @@ const HeaderPage = struct {
     reserved: [4075]u8,
 };
 
+const EncodingError = error{
+    Unrecoverable,
+};
+
 // asserts that size of page is 4096 bytes
-fn encodeHeaderPage(page: HeaderPage) [PAGE_SIZE]u8 {
+fn encodeHeaderPage(page: HeaderPage) EncodingError![PAGE_SIZE]u8 {
+    if (!std.mem.eql(u8, &page.magic, "PUNK_DB_01")) {
+        return EncodingError.Unrecoverable;
+    }
+
     var buffer: [PAGE_SIZE]u8 = undefined;
     var w = std.Io.Writer.fixed(&buffer);
 
@@ -40,7 +48,7 @@ fn encodeHeaderPage(page: HeaderPage) [PAGE_SIZE]u8 {
 
 test encodeHeaderPage {
     // Golden case
-    const page: HeaderPage = .{
+    var page: HeaderPage = .{
         .magic = "PUNK_DB_01".*,
         .version = 1,
         .pageSize = PAGE_SIZE,
@@ -49,7 +57,7 @@ test encodeHeaderPage {
         .reserved = [_]u8{0} ** 4075,
     };
 
-    const encoded_page = encodeHeaderPage(page);
+    const encoded_page = try encodeHeaderPage(page);
     try expectEqual(4096, encoded_page.len);
     try expectEqualSlices(u8, "PUNK_DB_01", encoded_page[0..10]);
     try expectEqual(@as(u8, 1), encoded_page[10]);
@@ -57,4 +65,8 @@ test encodeHeaderPage {
     try expectEqual(@as(u32, 1), std.mem.readInt(u32, encoded_page[13..17], .little));
     try expectEqual(@as(u32, 0), std.mem.readInt(u32, encoded_page[17..21], .little));
     try expectEqualSlices(u8, &([_]u8{0} ** 4075), encoded_page[21..encoded_page.len]);
+
+    // Expect panic
+    page.magic = "eorroneous".*;
+    try std.testing.expectError(EncodingError.Unrecoverable, encodeHeaderPage(page));
 }
