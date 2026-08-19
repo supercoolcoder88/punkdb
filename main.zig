@@ -2,17 +2,12 @@ const std = @import("std");
 const print = std.debug.print;
 const expectEqual = std.testing.expectEqual;
 const expectEqualSlices = std.testing.expectEqualSlices;
+const golden = @import("test_util/golden.zig");
+const config = @import("config");
+
 pub fn main() !void {}
 
-const PAGE_SIZE: usize = 4096;
-
-const BTreePageHeader = struct {
-    pageType: u8,
-    cellsCount: u16,
-    startOffset: u16,
-    childPageId: u32,
-    reserved: [7]u8,
-};
+const PAGE_SIZE: usize = 4096; // WARNING: hardcoded to 4096
 
 const HeaderPage = struct {
     magic: [10]u8,
@@ -58,15 +53,25 @@ test encodeHeaderPage {
     };
 
     const encoded_page = try encodeHeaderPage(page);
-    try expectEqual(4096, encoded_page.len);
-    try expectEqualSlices(u8, "PUNK_DB_01", encoded_page[0..10]);
-    try expectEqual(@as(u8, 1), encoded_page[10]);
-    try expectEqual(@as(u16, 4096), std.mem.readInt(u16, encoded_page[11..13], .little));
-    try expectEqual(@as(u32, 1), std.mem.readInt(u32, encoded_page[13..17], .little));
-    try expectEqual(@as(u32, 0), std.mem.readInt(u32, encoded_page[17..21], .little));
-    try expectEqualSlices(u8, &([_]u8{0} ** 4075), encoded_page[21..encoded_page.len]);
 
-    // Expect panic
-    page.magic = "eorroneous".*;
+    if (config.write_golden) {
+        golden.writeGolden(&encoded_page, "header_page.golden");
+    }
+
+    var buffer: [4096]u8 = golden.readGolden("header_page.golden");
+    try expectEqualSlices(u8, &encoded_page, &buffer);
+
+    // Invalid magic must be rejected.
+    page.magic = "spookerror".*;
     try std.testing.expectError(EncodingError.Unrecoverable, encodeHeaderPage(page));
 }
+
+const BTreePageHeader = struct {
+    pageType: u8,
+    cellsCount: u16,
+    startOffset: u16,
+    childPageId: u32,
+    reserved: [7]u8,
+};
+
+// B-Tree page structure is Header -> Offset array -> ?freespace -> cells

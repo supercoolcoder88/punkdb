@@ -17,6 +17,14 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the application");
     run_step.dependOn(&run_exe.step);
 
+    // Testing options
+    const write_golden = b.option(bool, "golden", "update golden cases") orelse false;
+
+    const options = b.addOptions();
+    options.addOption(bool, "write_golden", write_golden);
+
+    exe.root_module.addOptions("config", options);
+
     const unit_tests = b.addTest(.{
         .root_module = main_module,
     });
@@ -27,4 +35,3 @@ pub fn build(b: *std.Build) void {
     // Make the default `zig build` run tests after building the executable.
     b.getInstallStep().dependOn(&run_unit_tests.step);
 }
-
